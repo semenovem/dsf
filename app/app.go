@@ -1,4 +1,4 @@
-package apptool
+package app
 
 import (
   "context"
@@ -23,7 +23,7 @@ type apptool struct {
   timer          *time.Timer
   fnsStarted     []func()
   fnsAfterTasks  []func()
-  fnsFailed      []func() // подписка на событие ошибки запуска
+  fnsFailed      []func() // Подписка на событие ошибки запуска
 }
 
 func New() *apptool {

@@ -1,4 +1,4 @@
-package apptool
+package app
 
 func (a *apptool) RegisterStarted(fn func()) {
 	if a.wait {
