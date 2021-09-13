@@ -7,22 +7,22 @@ import (
   "strings"
 )
 
-func (a *Api) routerHelpReply() string {
+func (a *Cmd) routerHelpReply() string {
   keys := make([]string, 0)
-  for it, _ := range a.routes {
+  for it := range a.routes {
     keys = append(keys, it)
   }
   return fmt.Sprintf("Available URL: [%s]", strings.Join(keys, ", "))
 }
 
-func (a *Api) Route(path string, handler RouteHandler) {
+func (a *Cmd) Route(path string, handler RouteHandler) {
   _, has := a.routes[path]
   if has {
-    a.log.Panic("URL path already exists")
+    a.log.Panic(ErrPathExist)
   }
 
   if handler == nil {
-    a.log.Panic("Handler cannot be nil")
+    a.log.Panic(ErrEmptyHandler)
   }
 
   a.routes[path] = &Route{
@@ -31,23 +31,24 @@ func (a *Api) Route(path string, handler RouteHandler) {
   }
 }
 
-func (a *Api) DelRoute(path string) {
+func (a *Cmd) DelRoute(path string) {
   delete(a.routes, path)
 }
 
-func (a *Api) HasRoute(path string) bool {
+func (a *Cmd) HasRoute(path string) bool {
   _, has := a.routes[path]
   return has
 }
 
-func (a *Api) RouteReply(route string, fn func(*Reply) error) {
+func (a *Cmd) RouteReply(route string, fn func(*Reply) error) {
   a.Route(route, func(w http.ResponseWriter, r *http.Request) (*Reply, error) {
     reply := &Reply{}
     err := fn(reply)
     return reply, err
   })
 }
-func (a *Api) RouteFn(route string, fn func() error) {
+
+func (a *Cmd) RouteFn(route string, fn func() error) {
   a.Route(route, func(w http.ResponseWriter, r *http.Request) (*Reply, error) {
     reply := &Reply{
       Ok: true,
@@ -61,7 +62,7 @@ func (a *Api) RouteFn(route string, fn func() error) {
   })
 }
 
-func (a *Api) RouteReqReply(route string, fn func(*http.Request, *Reply) error) {
+func (a *Cmd) RouteReqReply(route string, fn func(*http.Request, *Reply) error) {
   a.Route(route, func(w http.ResponseWriter, r *http.Request) (*Reply, error) {
     reply := &Reply{}
     err := fn(r, reply)
@@ -69,7 +70,7 @@ func (a *Api) RouteReqReply(route string, fn func(*http.Request, *Reply) error) 
   })
 }
 
-func (a *Api) RouteText(route string, v string) {
+func (a *Cmd) RouteText(route string, v string) {
   a.Route(route, func(_ http.ResponseWriter, _ *http.Request) (*Reply, error) {
     return &Reply{
       Ok:    true,
@@ -78,16 +79,15 @@ func (a *Api) RouteText(route string, v string) {
   })
 }
 
-func (a *Api) RouteHealth(route string) {
+func (a *Cmd) RouteHealth(route string) {
   a.Route(route, func(w http.ResponseWriter, r *http.Request) (*Reply, error) {
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(http.StatusOK)
-
     return nil, nil
   })
 }
 
-func (a *Api) router(w http.ResponseWriter, r *http.Request) {
+func (a *Cmd) router(w http.ResponseWriter, r *http.Request) {
   a.log.Info("API IN", r.URL.Path)
 
   path := strings.ToLower(r.URL.Path)
@@ -108,14 +108,13 @@ func (a *Api) router(w http.ResponseWriter, r *http.Request) {
 
   if route != nil {
     a.routeServe(w, r, route.Handler)
-
     return
   }
 
   a.NotFound(w, r, a.routerHelpReply())
 }
 
-func (a *Api) routeServe(w http.ResponseWriter, r *http.Request, h RouteHandler) {
+func (a *Cmd) routeServe(w http.ResponseWriter, r *http.Request, h RouteHandler) {
   resp, err := h(w, r)
 
   if err != nil {
@@ -147,4 +146,6 @@ func (a *Api) routeServe(w http.ResponseWriter, r *http.Request, h RouteHandler)
       a.log.Error(err)
     }
   }
+
+  // todo обработать и этот кейс
 }

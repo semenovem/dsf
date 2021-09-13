@@ -6,7 +6,7 @@ import (
   "net/http"
 )
 
-func (a *Api) NotFound(w http.ResponseWriter, r *http.Request, reply string) {
+func (a *Cmd) NotFound(w http.ResponseWriter, r *http.Request, reply string) {
   w.Header().Set("Content-Type", "application/json")
   w.WriteHeader(http.StatusNotFound)
 
@@ -24,7 +24,7 @@ func (a *Api) NotFound(w http.ResponseWriter, r *http.Request, reply string) {
   }
 }
 
-func (a *Api) ServiceUnavailable(w http.ResponseWriter, errMsg string) {
+func (a *Cmd) ServiceUnavailable(w http.ResponseWriter, errMsg string) {
   w.Header().Set("Content-Type", "application/json")
   w.WriteHeader(http.StatusServiceUnavailable)
 
@@ -40,7 +40,7 @@ func (a *Api) ServiceUnavailable(w http.ResponseWriter, errMsg string) {
   }
 }
 
-func (a *Api) handlerHelp(_ http.ResponseWriter, _ *http.Request) (*Reply, error) {
+func (a *Cmd) handlerHelp(_ http.ResponseWriter, _ *http.Request) (*Reply, error) {
   return &Reply{
     Ok:    true,
     Reply: a.routerHelpReply(),

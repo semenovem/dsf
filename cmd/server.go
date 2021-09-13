@@ -6,11 +6,11 @@ import (
   "strconv"
 )
 
-func (a *Api) SetPort(port int) {
+func (a *Cmd) SetPort(port int) {
   a.port = port
 }
 
-func (a *Api) Start() error {
+func (a *Cmd) Start() error {
   a.mx.Lock()
   defer a.mx.Unlock()
 
@@ -42,7 +42,7 @@ func (a *Api) Start() error {
   return nil
 }
 
-func (a *Api) Stop() {
+func (a *Cmd) Stop() {
   a.mx.Lock()
   defer a.mx.Unlock()
 
