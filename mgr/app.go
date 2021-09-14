@@ -1,53 +1,65 @@
-package app
+package mgr
 
 import (
   "context"
+  "fmt"
   "github.com/sirupsen/logrus"
   "os"
+  "os/exec"
   "os/signal"
   "sync"
   "syscall"
   "time"
 )
 
-type apptool struct {
-  Timeout        time.Duration // Таймаут ожидания 0 - без таймаута
-  Log            *logrus.Entry
-  Ctx            context.Context
-  ctxCancel      context.CancelFunc
-  tasksCompleted bool
-  failFn         func() // Функция при ошибке в одной из задач
-  wait           bool   // Флаг начала ожидания работы приложения
-  isErr          bool   // Одна из задач завершилась с ошибкой
-  wg             sync.WaitGroup
-  timer          *time.Timer
-  fnsStarted     []func()
-  fnsAfterTasks  []func()
-  fnsFailed      []func() // Подписка на событие ошибки запуска
+type mgr struct {
+  Timeout           time.Duration // Таймаут ожидания 0 - без таймаута
+  Log               *logrus.Entry
+  Ctx               context.Context
+  IsCli             bool          // Вывод в консоль
+  ShutdownTimeoutMs time.Duration // Время ожидания закрытия приложения
+  ctxCancel         context.CancelFunc
+  tasksCompleted    bool
+  failFn            func() // Функция при ошибке в одной из задач
+  wait              bool   // Флаг начала ожидания работы приложения
+  isErr             bool   // Одна из задач завершилась с ошибкой
+  started           bool   // Флаг запуска всех задач
+  wg                sync.WaitGroup
+  timer             *time.Timer
+  fnsStarted        []func()
+  fnsAfterTasks     []func()
+  fnsFailed         []func() // Подписка на событие ошибки запуска
+  sig               chan os.Signal
 }
 
-func New() *apptool {
+func New() *mgr {
   ctx, cancel := context.WithCancel(context.Background())
 
-  go func() {
-    sig := make(chan os.Signal, 1)
-    signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-    <-sig
-    cancel()
-  }()
-
-  return &apptool{
+  o := &mgr{
     Ctx:       ctx,
     ctxCancel: cancel,
     Log:       logrus.NewEntry(logrus.New()),
   }
+
+  go func() {
+    o.sig = make(chan os.Signal, 1)
+    signal.Notify(o.sig, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+    <-o.sig
+    cancel()
+  }()
+
+  return o
 }
 
-func (a *apptool) Exit() {
+func (a *mgr) Exit() {
   a.ctxCancel()
 }
 
-func (a *apptool) startTimeout() {
+func (a *mgr) Ready() bool {
+  return a.started
+}
+
+func (a *mgr) startTimeout() {
   if a.Timeout > 0 && a.timer == nil {
     fn := func() {
       if !a.tasksCompleted {
@@ -60,7 +72,7 @@ func (a *apptool) startTimeout() {
 }
 
 // Task Добавляет задачу на запуск
-func (a *apptool) Task(fn func() error) {
+func (a *mgr) Task(fn func() error) {
   if a.wait {
     a.Log.Panic("Task cannot be added after Wait")
   }
@@ -76,8 +88,40 @@ func (a *apptool) Task(fn func() error) {
 }
 
 // Wait ожидание запуска задач
-func (a *apptool) Wait() {
+func (a *mgr) Wait() {
+  if a.wait {
+    a.Log.Panic("Использование более одного вызова метода")
+  }
+
   a.wait = true
+
+  if a.IsCli {
+    go func() {
+      err := exec.Command("stty", "-F", "/dev/tty", "cbreak", "min", "1").Run()
+      if err != nil {
+        a.Log.Warn(err)
+        return
+      }
+      err = exec.Command("stty", "-F", "/dev/tty", "-echo").Run()
+      if err != nil {
+        a.Log.Warn(err)
+        return
+      }
+      var b = make([]byte, 1)
+      for {
+        _, err = os.Stdin.Read(b)
+        if err != nil {
+          a.Log.Warn(err)
+          return
+        }
+        switch b[0] {
+        // TODO change to receive a scan code of a button
+        case 153, 208, 185, 113, 81:
+          a.ctxCancel()
+        }
+      }
+    }()
+  }
 
   go func() {
     a.wg.Wait()
@@ -97,7 +141,40 @@ func (a *apptool) Wait() {
       return
     }
     a.fireStarted()
+    a.started = true
   }()
 
   <-a.Ctx.Done()
+
+  if a.ShutdownTimeoutMs > 0 {
+    a.Log.Infof("Application stopping")
+    ch := make(chan struct{}, 1)
+    do := true
+
+    if a.IsCli {
+      go func() {
+        for do {
+          fmt.Print(".")
+          time.Sleep(time.Millisecond * delayRepeatDot)
+        }
+        close(ch)
+      }()
+    } else {
+      close(ch)
+    }
+
+    select {
+    case <-time.After(a.ShutdownTimeoutMs):
+    case <-a.sig:
+    }
+
+    if a.IsCli {
+      fmt.Println()
+    }
+
+    do = false
+    <-ch
+  }
 }
+
+const delayRepeatDot = 200
