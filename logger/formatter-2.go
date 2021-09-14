@@ -1,4 +1,4 @@
-package lg
+package logger
 
 import (
   "bytes"
@@ -10,12 +10,10 @@ import (
   "time"
 )
 
-// Форматтер для CLI при разработке
+// Форматер для CLI при разработке
 
-//взят из этой библиотеки
-//```
-//https://github.com/antonfisher/nested-logrus-formatter
-//```
+// взят из этой библиотеки
+// https://github.com/antonfisher/nested-logrus-formatter
 
 // Formatter - logrus formatter, implements logrus.Formatter
 type Formatter struct {

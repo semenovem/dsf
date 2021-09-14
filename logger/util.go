@@ -1,33 +1,10 @@
-package lg
+package logger
 
-import (
-  "github.com/sirupsen/logrus"
-  "strings"
-)
-
-func ParseLev(s string) logrus.Level {
-  if l, err := logrus.ParseLevel(s); err == nil {
-    return l
-  }
-  return defaultLev
-}
-
-func ParseMod(m string, defMod string) string {
-  if isMod(strings.ToLower(m)) {
-    return m
-  }
-  if isMod(strings.ToLower(defMod)) {
-    return defMod
+func ParseMod(m string) (ModeOut, error) {
+  v, ok := ModeKeyVal[m]
+  if ok {
+    return v, nil
   }
 
-  panic("The value is not a valid mode")
-}
-
-func isMod(m string) bool {
-  switch m {
-  case ModeJson, ModeText, ModeShortText:
-    return true
-  }
-
-  return false
+  return 0, ErrParseMode
 }
