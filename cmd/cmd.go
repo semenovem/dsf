@@ -14,7 +14,7 @@ type Cmd struct {
   routes map[string]*Route
   mx     sync.Mutex
   log    *logrus.Entry
-  cxt    context.Context
+  ctx    context.Context
 }
 
 var (
@@ -23,19 +23,19 @@ var (
   ErrInvalidDataFormat = errors.New("cmd: Invalid data format")
 )
 
-func New(ctx context.Context) *Cmd {
+func New(ctx context.Context, l *logrus.Entry) *Cmd {
   a := &Cmd{
     routes: make(map[string]*Route),
-    cxt:    ctx,
+    ctx:    ctx,
+    log:    l,
   }
   a.Route("/help", a.handlerHelp)
+
+
+
   return a
 }
 
 func (a *Cmd) Ready() bool {
   return a.server != nil
-}
-
-func (a *Cmd) SetLogger(l *logrus.Entry) {
-  a.log = l
 }

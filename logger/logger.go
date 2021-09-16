@@ -12,6 +12,7 @@ type Logger struct {
   mode       ModeOut
   cli        bool
   timeFormat string
+  sysName    string // Имя поля с названием системы
 }
 
 type sys2 struct {
@@ -30,10 +31,10 @@ const (
   ModeIntJson ModeOut = iota
   ModeIntText
   ModeIntShort
-  defTimeFormat = time.RFC3339
-  defLevel      = logrus.TraceLevel
-  defMode       = ModeIntJson
-  defSysName    = "sys"
+  defTimeFormat   = time.RFC3339
+  defLevel        = logrus.TraceLevel
+  defMode         = ModeIntJson
+  defSysFieldName = "sys"
 )
 
 var ModeKeyVal = map[string]ModeOut{
@@ -60,13 +61,11 @@ func New() *Logger {
     timeFormat: defTimeFormat,
     mode:       defMode,
     level:      defLevel,
+    sysName:    defSysFieldName,
   }
 }
 
 func (l *Logger) GetLog(n string) *logrus.Entry {
-  if n == "" {
-    panic(ErrEmptySysName)
-  }
   it, ok := l.listEntry[n]
   if !ok {
     it = &sys2{
@@ -75,11 +74,24 @@ func (l *Logger) GetLog(n string) *logrus.Entry {
     l.listEntry[n] = it
     it.ent.Logger.SetFormatter(l.formatter(it))
   }
-  it.ent.Data[defSysName] = n
-
+  if n != "" {
+    it.ent.Data[l.sysName] = n
+  }
   return it.ent
 }
 
 func (l *Logger) createEntry() *logrus.Entry {
   return logrus.NewEntry(logrus.New())
+}
+
+// SysFieldName установить название поля с именем системы
+func (l *Logger) SysFieldName(n string) {
+  for _, sys := range l.listEntry {
+    oldName, ok := sys.ent.Data[l.sysName]
+    if ok {
+      delete(sys.ent.Data, l.sysName)
+      sys.ent.Data[n] = oldName
+    }
+  }
+  l.sysName = n
 }
