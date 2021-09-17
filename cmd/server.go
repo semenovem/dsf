@@ -4,6 +4,7 @@ import (
   "fmt"
   "net/http"
   "strconv"
+  "time"
 )
 
 func (a *Cmd) SetPort(port int) {
@@ -15,7 +16,8 @@ func (a *Cmd) Start() error {
   defer a.mx.Unlock()
 
   if a.server != nil {
-    return nil
+    a.log.Error(ErrAlreadyStarted)
+    return ErrAlreadyStarted
   }
 
   if a.port < 1 {
@@ -29,23 +31,44 @@ func (a *Cmd) Start() error {
     Handler: http.HandlerFunc(a.router),
   }
 
+  a.log.Infof("API server started on port %d", a.port)
+
+  var err error
+
   go func() {
     defer a.Stop()
 
-    if err := a.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-      a.log.Error("API server error: ", err)
+    if err = a.server.ListenAndServe(); err != nil {
+      if err == http.ErrServerClosed {
+        err = nil
+      } else {
+        a.log.Error("API server error: ", err)
+      }
     }
   }()
 
-  a.log.Infof("API server started on port %d", a.port)
+  select {
+  case <-time.After(time.Millisecond * 500):
+  case <-a.ctx.Done():
+  }
 
-  return nil
+  if err == nil {
+    go func() {
+      <-a.ctx.Done()
+      a.Stop()
+    }()
+  }
+
+  return err
 }
 
 func (a *Cmd) Stop() {
   a.mx.Lock()
   defer a.mx.Unlock()
+  a.stop()
+}
 
+func (a *Cmd) stop() {
   if a.server != nil {
     err := a.server.Close()
     a.server = nil

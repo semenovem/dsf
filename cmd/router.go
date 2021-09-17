@@ -135,6 +135,9 @@ func (a *Cmd) routeServe(w http.ResponseWriter, r *http.Request, h RouteHandler)
   if resp != nil {
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(http.StatusOK)
+    if resp.Reply == nil {
+      resp.Reply = ""
+    }
     body, _ := json.Marshal(resp)
     _, err := w.Write(body)
     if err != nil {

@@ -31,8 +31,6 @@ func New(ctx context.Context, l *logrus.Entry) *Cmd {
   }
   a.Route("/help", a.handlerHelp)
 
-
-
   return a
 }
 
