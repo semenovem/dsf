@@ -36,9 +36,10 @@ func New() *mgr {
   ctx, cancel := context.WithCancel(context.Background())
 
   o := &mgr{
-    Ctx:       ctx,
-    ctxCancel: cancel,
-    Log:       logrus.NewEntry(logrus.New()),
+    Ctx:               ctx,
+    ctxCancel:         cancel,
+    Log:               logrus.NewEntry(logrus.New()),
+    ShutdownTimeoutMs: defShutdownTimeout,
   }
 
   go func() {
@@ -74,7 +75,7 @@ func (a *mgr) startTimeout() {
 // Task Добавляет задачу на запуск
 func (a *mgr) Task(fn func() error) {
   if a.wait {
-    a.Log.Panic("Task cannot be added after Wait")
+    a.Log.Panic(ErrAfterWait)
   }
   a.startTimeout()
   a.wg.Add(1)
@@ -90,13 +91,14 @@ func (a *mgr) Task(fn func() error) {
 // Wait ожидание запуска задач
 func (a *mgr) Wait() {
   if a.wait {
-    a.Log.Panic("Использование более одного вызова метода")
+    a.Log.Panic(ErrWaitOnce)
   }
 
   a.wait = true
 
   if a.IsCli {
     go func() {
+      // TODO change to receive a scan code of a button
       err := exec.Command("stty", "-F", "/dev/tty", "cbreak", "min", "1").Run()
       if err != nil {
         a.Log.Warn(err)
@@ -114,11 +116,19 @@ func (a *mgr) Wait() {
           a.Log.Warn(err)
           return
         }
-        switch b[0] {
-        // TODO change to receive a scan code of a button
-        case 153, 208, 185, 113, 81:
-          a.ctxCancel()
+
+        if b[0] == 10 {
+          fmt.Println()
+          continue
         }
+
+        a.ctxCancel()
+
+        // временно отключим
+        //switch b[0] {
+        //case 153, 208, 185, 113, 81:
+        //  a.ctxCancel()
+        //}
       }
     }()
   }
@@ -176,5 +186,3 @@ func (a *mgr) Wait() {
     <-ch
   }
 }
-
-const delayRepeatDot = 200

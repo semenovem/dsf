@@ -10,6 +10,42 @@ import (
   "time"
 )
 
+func (l *Logger) formatter(it *sys) logrus.Formatter {
+  cli := it.dest == destCli || it.dest == destUnkn && l.dest == destCli
+
+  var mode modeOut
+  if it.mode == modeUnkn {
+    mode = l.mode
+  } else {
+    mode = it.mode
+  }
+
+  switch mode {
+  case modeText:
+    return &Formatter{
+      TrimMessages:     true,
+      HideKeys:         false,
+      DisableTimestamp: false,
+      FieldsOrder:      []string{l.sysName},
+      TimestampFormat:  l.timeFormat,
+      NoColors:         !cli,
+    }
+  case modeShort:
+    return &Formatter{
+      TrimMessages:     true,
+      HideKeys:         false,
+      DisableTimestamp: true,
+      FieldsOrder:      []string{l.sysName},
+      TimestampFormat:  l.timeFormat,
+      NoColors:         !cli,
+      HideSysFieldName: true,
+      SysFieldName:     l.sysName,
+    }
+  }
+
+  return &logrus.JSONFormatter{}
+}
+
 // Форматер для CLI при разработке
 
 // взят из этой библиотеки

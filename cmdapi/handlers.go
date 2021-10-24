@@ -1,4 +1,4 @@
-package cmd
+package cmdapi
 
 import (
   "encoding/json"

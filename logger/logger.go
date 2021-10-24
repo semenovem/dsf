@@ -7,59 +7,77 @@ import (
 )
 
 type Logger struct {
-  listEntry  map[string]*sys2
+  listEntry  map[string]*sys
   level      logrus.Level
-  mode       ModeOut
-  cli        bool
+  mode       modeOut
+  dest       destOut
   timeFormat string
   sysName    string // Имя поля с названием системы
 }
 
-type sys2 struct {
-  isSetLev  bool // Установлен ли определенный уровень логирования
-  isSetMode bool // Установлен ли режим вывода логов
-  mode      ModeOut
-  isSetCli  bool // Установлен ли режим вывода в консоль
-  cli       bool
-
-  ent *logrus.Entry
+type sys struct {
+  isSetLev bool // Установлен ли определенный уровень логирования
+  mode     modeOut
+  dest     destOut
+  ent      *logrus.Entry
 }
 
-type ModeOut int32
+type modeOut uint
+type destOut uint
 
 const (
-  ModeIntJson ModeOut = iota
-  ModeIntText
-  ModeIntShort
+  modeUnkn modeOut = iota
+  modeJson
+  modeText
+  modeShort
+
   defTimeFormat   = time.RFC3339
   defLevel        = logrus.TraceLevel
-  defMode         = ModeIntJson
+  defMode         = modeJson
+  defDest         = destFile
   defSysFieldName = "sys"
 )
 
-var ModeKeyVal = map[string]ModeOut{
-  ModeValKey[ModeIntJson]:  ModeIntJson,
-  ModeValKey[ModeIntText]:  ModeIntText,
-  ModeValKey[ModeIntShort]: ModeIntShort,
+const (
+  destUnkn destOut = iota
+  destFile
+  destCli
+)
+
+var modeKeyVal = map[string]modeOut{
+  modeValKey[modeJson]:  modeJson,
+  modeValKey[modeText]:  modeText,
+  modeValKey[modeShort]: modeShort,
 }
 
-var ModeValKey = map[ModeOut]string{
-  ModeIntJson:  "json",
-  ModeIntText:  "text",
-  ModeIntShort: "short",
+var modeValKey = map[modeOut]string{
+  modeJson:  "json",
+  modeText:  "text",
+  modeShort: "short",
+}
+
+var destKeyVal = map[string]destOut{
+  destValKey[destFile]: destFile,
+  destValKey[destCli]:  destCli,
+}
+
+var destValKey = map[destOut]string{
+  destFile: "file",
+  destCli:  "console",
 }
 
 var (
-  ErrParseMode    = errors.New("logger: ошибка парсинга режима вывода логов")
-  ErrEmptySysName = errors.New("logger: имя системы не может быть пустым")
-  ErrSysNotFound  = errors.New("logger: система не найдена")
+  ErrParseMode   = errors.New("logger: ошибка парсинга режима вывода логов")
+  ErrParseDest   = errors.New("logger: ошибка парсинга места записи логов")
+  ErrSysNotFound = errors.New("logger: система не найдена")
 )
 
 func New() *Logger {
   return &Logger{
-    listEntry:  map[string]*sys2{},
+    listEntry:  map[string]*sys{},
     timeFormat: defTimeFormat,
     mode:       defMode,
+    dest:       defDest,
     level:      defLevel,
     sysName:    defSysFieldName,
   }
@@ -68,7 +86,7 @@ func New() *Logger {
 func (l *Logger) GetLog(n string) *logrus.Entry {
   it, ok := l.listEntry[n]
   if !ok {
-    it = &sys2{
+    it = &sys{
       ent: l.createEntry(),
     }
     l.listEntry[n] = it
@@ -84,14 +102,118 @@ func (l *Logger) createEntry() *logrus.Entry {
   return logrus.NewEntry(logrus.New())
 }
 
-// SysFieldName установить название поля с именем системы
-func (l *Logger) SysFieldName(n string) {
-  for _, sys := range l.listEntry {
-    oldName, ok := sys.ent.Data[l.sysName]
-    if ok {
-      delete(sys.ent.Data, l.sysName)
-      sys.ent.Data[n] = oldName
+// aplDef применить дефолтные установки
+func (l *Logger) aplDef() {
+  for _, it := range l.listEntry {
+    it.ent.Logger.SetFormatter(l.formatter(it))
+  }
+}
+
+func (l *Logger) SetLevel(name, lev string) error {
+  if lev == "" {
+    return nil
+  }
+  v, err := logrus.ParseLevel(lev)
+  if err == nil {
+    it, ok := l.listEntry[name]
+    if !ok {
+      return ErrSysNotFound
+    }
+    it.isSetLev = true
+    it.ent.Logger.SetLevel(v)
+    l.level = v
+  }
+  return err
+}
+
+func (l *Logger) distrDefLevel() {
+  for _, it := range l.listEntry {
+    if !it.isSetLev {
+      it.ent.Logger.SetLevel(l.level)
     }
   }
-  l.sysName = n
+}
+
+func (l *Logger) SetDef(lev, mode, dest string) error {
+  var (
+    err0 error
+    apl  bool
+  )
+  if lev != "" {
+    p, err := logrus.ParseLevel(lev)
+    if err == nil {
+      l.level = p
+      l.distrDefLevel()
+    } else {
+      err0 = wrapErr(err0, err.Error())
+    }
+  }
+  if mode != "" {
+    m, err := parseMode(mode)
+    if err == nil {
+      l.mode = m
+      apl = true
+    } else {
+      err0 = wrapErr(err0, err.Error())
+    }
+  }
+  if dest != "" {
+    d, err := parseDest(dest)
+    if err == nil {
+      l.dest = d
+      apl = true
+    } else {
+      err0 = wrapErr(err0, err.Error())
+    }
+  }
+  if apl {
+    for _, it := range l.listEntry {
+      it.ent.Logger.SetFormatter(l.formatter(it))
+    }
+  }
+  return err0
+}
+
+func (l *Logger) Set(name, lev, mode, dest string) error {
+  var (
+    err0 error
+    apl  bool
+  )
+
+  it, ok := l.listEntry[name]
+  if !ok {
+    return ErrSysNotFound
+  }
+
+  if lev != "" {
+    l, err := logrus.ParseLevel(lev)
+    if err == nil {
+      it.ent.Logger.SetLevel(l)
+      it.isSetLev = true
+    } else {
+      err0 = wrapErr(err0, err.Error())
+    }
+  }
+  if mode != "" {
+    m, err := parseMode(mode)
+    if err == nil {
+      it.mode = m
+      apl = true
+    } else {
+      err0 = wrapErr(err0, err.Error())
+    }
+  }
+  if dest != "" {
+    d, err := parseDest(dest)
+    if err == nil {
+      it.dest = d
+      apl = true
+    } else {
+      err0 = wrapErr(err0, err.Error())
+    }
+  }
+  if apl {
+    it.ent.Logger.SetFormatter(l.formatter(it))
+  }
+  return err0
 }
