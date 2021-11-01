@@ -2,14 +2,14 @@ package mgr
 
 func (a *mgr) RegisterStarted(fn func()) {
   if a.wait {
-    a.Log.Panic("Handler cannot be added after Wait")
+    a.log.Panic("Handler cannot be added after Wait")
   }
   a.fnsStarted = append(a.fnsStarted, fn)
 }
 
 func (a *mgr) RegisterFailed(fn func()) {
   if a.wait {
-    a.Log.Panic("Handler cannot be added after Wait")
+    a.log.Panic("Handler cannot be added after Wait")
   }
   a.fnsFailed = append(a.fnsFailed, fn)
 }
