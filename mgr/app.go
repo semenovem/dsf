@@ -34,9 +34,7 @@ type mgr struct {
   chansExit         []chan struct{} // Каналы ожидания завершения работы
 }
 
-func New(l *logrus.Entry) *mgr {
-  ctx, cancel := context.WithCancel(context.Background())
-
+func New(ctx context.Context, cancel context.CancelFunc,  l *logrus.Entry) *mgr {
   o := &mgr{
     Ctx:               ctx,
     ctxCancel:         cancel,
@@ -101,7 +99,6 @@ func (a *mgr) Run(fn func() (chan struct{}, error)) {
   }
 
   l := len(a.chansExit)
-  fmt.Println(">>>> l = ", l)
   a.chansExit = append(a.chansExit, nil)
 
   a.mx.Unlock()
@@ -189,7 +186,6 @@ func (a *mgr) Wait() {
 
   <-a.Ctx.Done()
   a.log.Info("Application stopping")
-  a.log.Info("Application stopping = " , a.ShutdownTimeoutMs)
 
   if a.ShutdownTimeoutMs > 0 || len(a.chansExit) > 0 {
     ch := make(chan struct{}, 1)
@@ -219,6 +215,11 @@ func (a *mgr) Wait() {
     do = false
     <-ch
   }
+
+  if a.isErr {
+    syscall.Exit(1)
+  }
+  syscall.Exit(0)
 }
 
 func (a *mgr) waitingCompletion() chan struct{} {
@@ -253,9 +254,7 @@ func (a *mgr) waitingCompletion() chan struct{} {
     go func() {
       select {
       case <-chEx:
-      fmt.Println("**************** +++++++++ task")
       case <-chTm:
-      fmt.Println("**************** +++++++++ timeout")
       }
       close(ch)
     }()
