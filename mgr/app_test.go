@@ -1,6 +1,7 @@
 package mgr
 
 import (
+  "context"
   "fmt"
   "github.com/sirupsen/logrus"
   "testing"
@@ -8,7 +9,8 @@ import (
 )
 
 func testNew() *mgr {
-  return New(logrus.NewEntry(logrus.New()))
+  ctx, cancel := context.WithCancel(context.Background())
+  return New(ctx, cancel, logrus.NewEntry(logrus.New()))
 }
 
 func TestTask(t  *testing.T) {

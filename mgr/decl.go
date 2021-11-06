@@ -6,8 +6,8 @@ import (
 )
 
 var (
-  ErrAfterWait = errors.New("mgr: task cannot be added after Wait")
-  ErrWaitOnce = errors.New("mgr: Использование более одного вызова метода")
+  ErrAfterWait = errors.New("man: task cannot be added after Wait")
+  ErrWaitOnce = errors.New("man: Using more than one method call")
 )
 
 const delayRepeatDot = 200
