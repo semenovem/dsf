@@ -62,6 +62,20 @@ func (a *Cmd) RouteFn(route string, fn func() error) {
   })
 }
 
+func (a *Cmd) AddWithRequest(route string, fn func(*http.Request) error) {
+  a.Route(route, func(w http.ResponseWriter, r *http.Request) (*Reply, error) {
+    reply := &Reply{
+      Ok: true,
+    }
+    err := fn(r)
+    if err != nil {
+      reply.Ok = false
+      reply.ErrMsg = err.Error()
+    }
+    return reply, err
+  })
+}
+
 func (a *Cmd) RouteReqReply(route string, fn func(*http.Request, *Reply) error) {
   a.Route(route, func(w http.ResponseWriter, r *http.Request) (*Reply, error) {
     reply := &Reply{}
