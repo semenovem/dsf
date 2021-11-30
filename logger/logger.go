@@ -84,6 +84,10 @@ func New() *Logger {
 }
 
 func (l *Logger) GetLog(n string) *logrus.Entry {
+  return l.getOrCreateSys(n).ent
+}
+
+func (l *Logger) getOrCreateSys(n string) *sys {
   it, ok := l.listEntry[n]
   if !ok {
     it = &sys{
@@ -91,11 +95,12 @@ func (l *Logger) GetLog(n string) *logrus.Entry {
     }
     l.listEntry[n] = it
     it.ent.Logger.SetFormatter(l.formatter(it))
+    it.ent.Logger.SetLevel(l.level)
   }
   if n != "" {
     it.ent.Data[l.sysName] = n
   }
-  return it.ent
+  return it
 }
 
 func (l *Logger) createEntry() *logrus.Entry {
@@ -115,13 +120,9 @@ func (l *Logger) SetLevel(name, lev string) error {
   }
   v, err := logrus.ParseLevel(lev)
   if err == nil {
-    it, ok := l.listEntry[name]
-    if !ok {
-      return ErrSysNotFound
-    }
+    it := l.getOrCreateSys(name)
     it.isSetLev = true
     it.ent.Logger.SetLevel(v)
-    l.level = v
   }
   return err
 }
