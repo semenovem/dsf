@@ -14,9 +14,9 @@ import (
 
 type mgr struct {
   Timeout           time.Duration // Таймаут ожидания 0 - без таймаута
-  log               *logrus.Entry
-  Ctx               context.Context
-  IsCli             bool          // Вывод в консоль
+  log   *logrus.Entry
+  ctx   context.Context
+  IsCli bool          // Вывод в консоль
   ShutdownTimeoutMs time.Duration // Время ожидания закрытия приложения
   ctxCancel         context.CancelFunc
   tasksCompleted    bool
@@ -34,9 +34,9 @@ type mgr struct {
   chansExit         []chan struct{} // Каналы ожидания завершения работы
 }
 
-func New(ctx context.Context, cancel context.CancelFunc,  l *logrus.Entry) *mgr {
+func New(ctx context.Context, cancel context.CancelFunc, l *logrus.Entry) *mgr {
   o := &mgr{
-    Ctx:               ctx,
+    ctx:               ctx,
     ctxCancel:         cancel,
     log:               l,
     ShutdownTimeoutMs: defShutdownTimeout,
@@ -85,7 +85,6 @@ func (a *mgr) Task(fn func() error) {
   go func() {
     if err := fn(); err != nil {
       a.isErr = true
-      a.log.Errorf("Task launch error: %v", err)
     }
     a.wg.Done()
   }()
@@ -155,10 +154,10 @@ func (a *mgr) Wait() {
         a.ctxCancel()
 
         // временно отключим
-        //switch b[0] {
-        //case 153, 208, 185, 113, 81:
-        //  a.ctxCancel()
-        //}
+        switch b[0] {
+        case 153, 208, 185, 113, 81:
+          a.ctxCancel()
+        }
       }
     }()
   }
@@ -166,7 +165,7 @@ func (a *mgr) Wait() {
   go func() {
     a.wg.Wait()
     a.tasksCompleted = true
-    if a.Ctx.Err() != nil {
+    if a.ctx.Err() != nil {
       return
     }
 
@@ -184,7 +183,7 @@ func (a *mgr) Wait() {
     a.started = true
   }()
 
-  <-a.Ctx.Done()
+  <-a.ctx.Done()
   a.log.Info("Application stopping")
 
   if a.ShutdownTimeoutMs > 0 || len(a.chansExit) > 0 {

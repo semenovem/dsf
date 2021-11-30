@@ -8,21 +8,16 @@ import (
   "time"
 )
 
-func testNew() *mgr {
+func TestTask(t *testing.T) {
   ctx, cancel := context.WithCancel(context.Background())
-  return New(ctx, cancel, logrus.NewEntry(logrus.New()))
-}
-
-func TestTask(t  *testing.T) {
-  man := testNew()
-
+  man := New(ctx, cancel, logrus.NewEntry(logrus.New()))
 
   task := func() (chan struct{}, error) {
     time.Sleep(time.Millisecond * 10)
     ch := make(chan struct{})
 
     go func() {
-      <- man.Ctx.Done()
+      <-ctx.Done()
       fmt.Println("___ function started exiting")
       time.Sleep(time.Millisecond * 3000)
       close(ch)
@@ -40,16 +35,16 @@ func TestTask(t  *testing.T) {
   man.Wait()
 }
 
-
 func TestWaitingCompletion(t *testing.T) {
-  man := testNew()
+  ctx, cancel := context.WithCancel(context.Background())
+  man := New(ctx, cancel, logrus.NewEntry(logrus.New()))
 
   task := func() (chan struct{}, error) {
     time.Sleep(time.Millisecond * 10)
     ch := make(chan struct{})
 
     go func() {
-      <- man.Ctx.Done()
+      <-ctx.Done()
       fmt.Println("___ function started exiting")
       time.Sleep(time.Millisecond * 3000)
       close(ch)
