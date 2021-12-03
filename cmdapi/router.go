@@ -134,7 +134,7 @@ func (a *Cmd) routeServe(w http.ResponseWriter, r *http.Request, h RouteHandler)
   if err != nil {
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(http.StatusInternalServerError)
-    body, _ := json.Marshal(&Reply{
+    body, _ := JsonMarshal(&Reply{
       ErrMsg: err.Error(),
     })
     body = append(body, []byte("\n")...)

@@ -1,7 +1,9 @@
 package cmdapi
 
 import (
+  "bytes"
   "context"
+  "encoding/json"
   "errors"
   "github.com/sirupsen/logrus"
   "net/http"
@@ -36,4 +38,12 @@ func New(ctx context.Context, l *logrus.Entry) *Cmd {
 
 func (a *Cmd) Ready() bool {
   return a.server != nil
+}
+
+func JsonMarshal(t interface{}) ([]byte, error) {
+  buffer := &bytes.Buffer{}
+  encoder := json.NewEncoder(buffer)
+  encoder.SetEscapeHTML(false)
+  err := encoder.Encode(t)
+  return buffer.Bytes(), err
 }
