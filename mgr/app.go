@@ -5,7 +5,6 @@ import (
   "fmt"
   "github.com/sirupsen/logrus"
   "os"
-  "os/exec"
   "os/signal"
   "sync"
   "syscall"
@@ -14,22 +13,22 @@ import (
 
 type mgr struct {
   Timeout           time.Duration // Таймаут ожидания 0 - без таймаута
-  log   *logrus.Entry
-  ctx   context.Context
-  IsCli bool          // Вывод в консоль
+  log               *logrus.Entry
+  ctx               context.Context
+  IsCli             bool          // Вывод в консоль
   ShutdownTimeoutMs time.Duration // Время ожидания закрытия приложения
   ctxCancel         context.CancelFunc
   tasksCompleted    bool
-  failFn            func() // Функция при ошибке в одной из задач
-  wait              bool   // Флаг начала ожидания работы приложения
-  isErr             bool   // Одна из задач завершилась с ошибкой
-  started           bool   // Флаг запуска всех задач
-  wg                sync.WaitGroup
+  failFn            func()         // Функция при ошибке в одной из задач
+  wait              bool           // Флаг начала ожидания работы приложения
+  isErr             bool           // Одна из задач завершилась с ошибкой
+  started           bool           // Флаг запуска всех задач
+  wg                sync.WaitGroup // Ожидание задач запуска
   mx                sync.Mutex
   timer             *time.Timer
-  fnsStarted        []func()
-  fnsAfterTasks     []func()
-  fnsFailed         []func() // Подписка на событие ошибки запуска
+  fnsStarted        []func()       // Выполнить после всех задач. Не влияет на успешность старта
+  fnsAfterTasks     []func() error // Выполнить после всех задач на запуск
+  fnsFailed         []func()       // Подписка на событие ошибки запуска
   sig               chan os.Signal
   chansExit         []chan struct{} // Каналы ожидания завершения работы
 }
@@ -52,14 +51,11 @@ func New(ctx context.Context, cancel context.CancelFunc, l *logrus.Entry) *mgr {
   return o
 }
 
-func (a *mgr) Exit() {
-  a.ctxCancel()
-}
-
 func (a *mgr) Ready() bool {
   return a.started
 }
 
+// Запускает таймер ожидания завершения запуска
 func (a *mgr) startTimeout() {
   if a.Timeout > 0 && a.timer == nil {
     fn := func() {
@@ -90,7 +86,7 @@ func (a *mgr) Task(fn func() error) {
   }()
 }
 
-// Run Добавляет задачу на запуск
+// Run Добавляет задачу на запуск с каналом ожидания при завершении работы
 func (a *mgr) Run(fn func() (chan struct{}, error)) {
   a.mx.Lock()
   if a.wait {
@@ -126,62 +122,10 @@ func (a *mgr) Wait() {
   a.mx.Unlock()
 
   if a.IsCli {
-    go func() {
-      // TODO change to receive a scan code of a button
-      err := exec.Command("stty", "-F", "/dev/tty", "cbreak", "min", "1").Run()
-      if err != nil {
-        a.log.Warn(err)
-        return
-      }
-      err = exec.Command("stty", "-F", "/dev/tty", "-echo").Run()
-      if err != nil {
-        a.log.Warn(err)
-        return
-      }
-      var b = make([]byte, 1)
-      for {
-        _, err = os.Stdin.Read(b)
-        if err != nil {
-          a.log.Warn(err)
-          return
-        }
-
-        if b[0] == 10 {
-          fmt.Println()
-          continue
-        }
-
-        a.ctxCancel()
-
-        // временно отключим
-        switch b[0] {
-        case 153, 208, 185, 113, 81:
-          a.ctxCancel()
-        }
-      }
-    }()
+    go a.cli()
   }
 
-  go func() {
-    a.wg.Wait()
-    a.tasksCompleted = true
-    if a.ctx.Err() != nil {
-      return
-    }
-
-    if a.timer != nil {
-      a.timer.Stop()
-      a.timer = nil
-    }
-
-    if a.isErr {
-      a.fireFailed()
-      a.Exit()
-      return
-    }
-    a.fireStarted()
-    a.started = true
-  }()
+  go a.performWaitTasks()
 
   <-a.ctx.Done()
   a.log.Info("Application stopping")
