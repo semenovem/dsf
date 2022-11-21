@@ -1,4 +1,4 @@
-module github.com/semenovem/bsf
+module github.com/semenovem/go
 
 go 1.16
 
